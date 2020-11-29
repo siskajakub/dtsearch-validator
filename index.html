@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>dtSearch Validator</title>
+    <link href="./css/main.css" media="screen" rel="stylesheet" />
+    <link href="./js/vs/editor/editor.main.css" rel="stylesheet" />
+</head>
+<body>
+    <header>
+        <div id="logo">dt</div>
+    </header>
+    <table class="content">
+        <tr>
+            <td class="editor">
+                <section>
+                    <div id="monaco"></div>
+                </section>
+            </td>
+            <td class="legend">
+                <aside>
+                    <h1 id="title">
+                        <div>dtSearch</div>
+                        <div>Validator</div>
+                    </h1>
+                    <h2>Phrase</h2>
+                    <p>Each phrase needs to be enclosed in double quotes. This is required even if phrase has only one word. Enclosing each phrase in double quotes makes entire search term clearer and easier to understand.</p>
+                    <p><div class="legend-example-string">"plane"</div></p>
+                    <h2>Logical Operators</h2>
+                    <p>There are four logical operators: AND, AndAny, OR, NOT. Please note logical operators are case sensitive.</p>
+                    <p><div class="legend-example-string">"car"</div> <div class="legend-example-operator">AND</div> <div class="legend-example-string">"bike"</div> ()</p>
+                    <p><div class="legend-example-string">"car"</div> <div class="legend-example-operator">AndAny</div> <div class="legend-example-string">"bike"</div> ()</p>
+                    <p><div class="legend-example-string">"car"</div> <div class="legend-example-operator">OR</div> <div class="legend-example-string">"bike"</div> ()</p>
+                    <p><div class="legend-example-string">"car"</div> <div class="legend-example-operator">AND NOT</div> <div class="legend-example-string">"bike"</div> ()</p>
+                    <h2>Wildcards</h2>
+                    <p>There are three wildcard matching functions. Each is represented by one of the special characters: ?, *, ~.</p>
+                    <p>W/N (within N words) operator matches phrases occuring within a certain proximity of each other.</p>
+                    <p><div class="legend-example-string">"pla?e"</div> (any single character, [plane, place])</p>
+                    <p><div class="legend-example-string">"car*"</div> (any number of characters, [car, cartoon])</p>
+                    <p><div class="legend-example-string">"bike~"</div> (grammatical variations, [biker, biking])</p>
+                    <h2>Within Operator</h2>
+                    <p>W/N (within N words) operator matches phrases occuring within a certain proximity of each other.</p>
+                    <p><div class="legend-example-string">"bike"</div> <div class="legend-example-operator">W/3</div> <div class="legend-example-string">"electr*"</div> ()</p>
+                    <p><div class="legend-example-string">"bike"</div> <div class="legend-example-operator">NOT W/3</div> <div class="legend-example-string">"electr*"</div> ()</p>
+                    <h2>Side Notes</h2>
+                    <p>Searching using dtSearch is case-insensitive.</p>
+                    <p>punctuation marks (e.g. -,.@) are neglected and are treated as space.</p>
+                </aside>
+            </td>
+        </tr>
+    </table>
+    <footer>v1.0; Author: Jakub Siska (<a href="https://github.com/siskajakub" target="_blank">GitHub</a>); dtSearch is a registered trademark of dtSearch Corp. (<a href="https://dtsearch.com/" target="_blank">dtsearch.com</a>)</footer>
+
+    <script>var require = { paths: { 'vs': './js/vs' } };</script>
+    <script type="text/javascript" src="./js/vs/loader.js"></script>
+    <script type="text/javascript" src="./js/vs/editor/editor.main.nls.js"></script>
+    <script type="text/javascript" src="./js/vs/editor/editor.main.js"></script>
+    <script>
+        "use strict";
+        var editor = null;
+
+        var code = [
+            'car',
+            '"bus"',
+            '"red car" AND NOT "bus"',
+            '"car" NOT W/1 bike',
+            'NOT ("plane" AND "airport")',
+            '"boat" NOT W/0 "sea"'
+        ].join('\n');
+
+        require(['vs/editor/editor.main'], function () {
+            // Register a new language
+            monaco.languages.register({ id: 'dtsearch' });
+
+            // Register language configuration
+            monaco.languages.setLanguageConfiguration('dtsearch', {
+                brackets: [
+                    ['(', ')']
+                ],
+
+                autoClosingPairs: [
+                    { 'open': '(', 'close': ')' },
+                    { 'open': '"', 'close': '"', 'notIn': ['string'] },
+                ],
+
+                autoCloseBefore: ')',
+
+                surroundingPairs: [
+                    ['(', ')'],
+                    ['"', '"']
+                ]
+            });
+
+            // Register a tokens provider for the language
+            monaco.languages.setMonarchTokensProvider('dtsearch', {
+                // Set defaultToken to invalid to see what you do not tokenize yet
+                defaultToken: 'error',
+
+                // The main tokenizer for our languages
+                tokenizer: {
+                    root: [
+                        // brackets
+                        [/[()]/, '@brackets'],
+
+                        // operators at wrong place
+                        [/^[^\w]*(AND|AndAny|OR)([^\w]+NOT)?/, 'error' ], // NOT can be in the beginning
+                        [/(AND|AndAny|OR|NOT)([^\w]+NOT)?[^\w]*$/, 'error' ],
+                        [/^[^\w]*(NOT[^\w]+)?[^\w]*W\/[0-9]*/, 'error' ],
+                        [/(NOT[^\w]+)?W\/[0-9]*[^\w]*$/, 'error' ],
+                        [/^[^\w]*(NOT[^\w]+)?[^\w]*PRE\/[0-9]*/, 'error' ],
+                        [/(NOT[^\w]+)?PRE\/[0-9]*[^\w]*$/, 'error' ],
+
+                        // operators
+                        [/^NOT\s+/, 'operator' ],
+                        [/\s+(AND|AndAny|OR)(\s+NOT)?\s+/, 'operator' ],
+                        [/\s+(NOT\s+)?W\/[1-9][0-9]*(\s+(xfirstword|xlastword))?\s+/, 'operator' ],
+                        [/\s+(NOT\s+)?PRE\/[1-9][0-9]*\s+/, 'operator' ],
+
+                        // strings
+                        [/"([^"\\]|\\.)*$/, 'string.invalid'],  // non-teminated string
+                        [/"/, 'string', '@string'],
+                        
+                        // whitespace
+                        { include: '@whitespace' },
+                    ],
+
+                    string: [
+                        [/[^\\"]+/, 'string'],
+                        [/\\./, 'string.escape.invalid'],
+                        [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' } ]
+                    ],
+
+                    whitespace: [
+                        [/[ \t\r\n]+/, 'white'],
+                    ],
+                }
+            });
+
+            // Define editor colors (dark/light)
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                // dark theme
+                var themeBase = 'vs-dark';
+                var themeRules = [
+                    { token: 'string', foreground: 'ce9178'},
+                    { token: 'operator', foreground: '569cd6' },
+                    { token: 'error', foreground: 'd4d4d4' },
+                    { token: 'delimiter.parenthesis', foreground: 'ce9178'}
+                ];
+            }
+            else {
+                // light theme
+                var themeBase = 'vs';
+                var themeRules = [
+                    { token: 'editor.background', foreground: '000000'},
+                    { token: 'string', foreground: '008800'},
+                    { token: 'operator', foreground: '0000dd' },
+                    { token: 'error', foreground: 'a00000' },
+                    { token: 'delimiter.parenthesis', foreground: '008800'}
+                ];
+            }
+
+            // Register a new theme
+            monaco.editor.defineTheme('dtsearchTheme', {
+                base: themeBase,
+                inherit: true,
+                rules: themeRules
+            });
+
+            // Register a new editor
+            editor = monaco.editor.create(document.getElementById('monaco'), {
+                theme: 'dtsearchTheme',
+                value: code,
+                language: 'dtsearch',
+                codeLens: false,
+                folding: false,
+                fontFamily: 'Consolas, "Courier New", monospace',
+                fontSize: 18,
+                glyphMargin: false,
+                minimap: {
+                    enabled: false,
+                },
+                scrollBeyondLastLine: true,
+                scrollbar: {
+                    useShadows: false,
+                    verticalHasArrows: true,
+                    horizontalHasArrows: true,
+                    vertical: 'visible',
+                    horizontal: 'visible',
+                },
+            });
+        });
+    </script> 
+</body>
+</html>

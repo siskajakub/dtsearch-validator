@@ -1,0 +1,3 @@
+# ignore directories with Monaco Editor files
+js/vs/*
+min-maps/vs/*
